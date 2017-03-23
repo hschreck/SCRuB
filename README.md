@@ -2,7 +2,7 @@
 
 SCRuB (gem name scrubdeku) is a Ruby gem to ease integration with the SellerCloud platform by providing a simple wrapper around the SellerCloud SOAP API.
 
-To get started, require the gem 'SCRuB' in your project.
+To get started, require the gem 'scrubdeku' in your project.
 
 ````
 require 'SCRuB'
