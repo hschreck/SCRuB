@@ -130,11 +130,11 @@ module Scrub
 
       orderData = @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item]
       if orderData.kind_of? Array
-        productTable[orderData[:product_id]] = {"qty" => orderData[:qty], "description" => orderData[:display_name]}
-      else
         orderData.each do |item|
           productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name]}
         end
+      elsif orderData.kind_of? Hash
+        productTable[orderData[:product_id]] = {"qty" => orderData[:qty], "description" => orderData[:display_name]}
       end
       return productTable
     end
@@ -144,20 +144,18 @@ module Scrub
       orderData = @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item]
       if orderData.kind_of? Array
         buildout = {}
-        puts item[:bundle_items][:order_bundle_item]
-        orderData[:bundle_items][:order_bundle_item].each do |bundleItem|
-          buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
-        end
-        productTable[orderData[:product_id]] = {"qty" => orderData[:qty], "description" => orderData[:display_name], 'components' => buildout}
-      else
         orderData.each do |item|
-          buildout = {}
-          puts item[:bundle_items][:order_bundle_item]
           item[:bundle_items][:order_bundle_item].each do |bundleItem|
             buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
           end
           productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name], 'components' => buildout}
         end
+      elsif orderData.kind_of? Hash
+        buildout = {}
+        orderData[:bundle_items][:order_bundle_item].each do |bundleItem|
+          buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
+        end
+        productTable[orderData[:product_id]] = {"qty" => orderData[:qty], "description" => orderData[:display_name], 'components' => buildout}
       end
       return productTable
     end
