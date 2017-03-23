@@ -44,7 +44,7 @@ module Scrub
         response = @inventoryClient.call(:product_warehouse_inventory_get, message: {'WarehouseID' => warehouseid, 'pageNumber' => page}).to_hash[:product_warehouse_inventory_get_response][:product_warehouse_inventory_get_result][:string]
       rescue NoMethodError
         []
-      rescue
+      rescue Net::OpenTimeout, Errno::ECONNRESET
         puts "Retrying..."
         retry
       end
@@ -61,7 +61,7 @@ module Scrub
     def getSkuInventoryAllWarehouses(sku)
       begin
         response = self.generalRaw(:get_product_inventory_for_all_warehouses, {'ProductID' => sku})[:get_product_inventory_for_all_warehouses_response][:get_product_inventory_for_all_warehouses_result][:get_product_inventory_for_all_warehouses_response_type]
-      rescue Net::OpenTimeout
+      rescue Net::OpenTimeout, Errno::ECONNRESET
         retry
       end
     end
@@ -70,8 +70,9 @@ module Scrub
       inventory = {}
       skus = skuTable.in_groups(threads)
       lock = Mutex.new
+      threadList = []
       (0...threads).each do |i|
-        Thread.new do
+        threadList << Thread.new do
           threadTable = {}
           skus[i].each do |sku|
             puts "Getting data for #{sku}"
@@ -83,6 +84,7 @@ module Scrub
           end
         end
       end
+      threadList.each{|thr| thr.join}
       return inventory
     end
 
