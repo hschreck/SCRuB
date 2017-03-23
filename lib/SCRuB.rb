@@ -92,6 +92,16 @@ module Scrub
       self.generalRaw(:get_inventory, {'ProductID' => sku, 'WarehouseID' => warehouse})
     end
 
+    def getProductNameFromSku(sku)
+      begin
+        self.generalRaw(:get_product_info, {'id' => sku})[:get_product_info_response][:get_product_info_result][:product_name]
+      rescue Net::OpenTimeout, Errno::ECONNRESET
+        retry
+      rescue NoMethodError
+        ""
+      end
+    end
+
       #Testing/debugging calls
     def generalRaw(call, messageIn)
       @generalClient.call(call, message: messageIn).to_hash
@@ -117,21 +127,37 @@ module Scrub
 
     def products
       productTable = {}
-      @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item].each do |item|
-        productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name]}
+
+      orderData = @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item]
+      if orderData.kind_of? Array
+        productTable[orderData[:product_id]] = {"qty" => orderData[:qty], "description" => orderData[:display_name]}
+      else
+        orderData.each do |item|
+          productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name]}
+        end
       end
       return productTable
     end
 
     def kit_listing
       productTable = {}
-      @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item].each do |item|
+      orderData = @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item]
+      if orderData.kind_of? Array
         buildout = {}
         puts item[:bundle_items][:order_bundle_item]
-        item[:bundle_items][:order_bundle_item].each do |bundleItem|
+        orderData[:bundle_items][:order_bundle_item].each do |bundleItem|
           buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
         end
-        productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name], 'components' => buildout}
+        productTable[orderData[:product_id]] = {"qty" => orderData[:qty], "description" => orderData[:display_name], 'components' => buildout}
+      else
+        orderData.each do |item|
+          buildout = {}
+          puts item[:bundle_items][:order_bundle_item]
+          item[:bundle_items][:order_bundle_item].each do |bundleItem|
+            buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
+          end
+          productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name], 'components' => buildout}
+        end
       end
       return productTable
     end
