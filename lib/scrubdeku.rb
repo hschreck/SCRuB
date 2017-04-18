@@ -18,7 +18,11 @@ module Scrub
     end
 
     def order_data(orderNumber)
-      @generalClient.call(:orders_get_data, message: {'orderId' => orderNumber}).to_hash
+      begin
+        @generalClient.call(:orders_get_data, message: {'orderId' => orderNumber}).to_hash
+      rescue Net::OpenTimeout
+        retry
+      end
     end
 
     def getWarehouseInventoryList(warehouseid)
@@ -95,7 +99,7 @@ module Scrub
     def getProductNameFromSku(sku)
       begin
         self.generalRaw(:get_product_info, {'id' => sku})[:get_product_info_response][:get_product_info_result][:product_name]
-      rescue Net::OpenTimeout, Errno::ECONNRESET
+      rescue Net::OpenTimeout, Errno::ECONNRESET, Savon::HTTPError, Savon::SOAPFault
         retry
       rescue NoMethodError
         ""
@@ -118,17 +122,25 @@ module Scrub
     def invOperations
       @inventoryClient.operations
     end
+
+    def getShippedOrdersByNum(startDate, endDate=startDate, clientID)
+      orders = []
+      self.generalRaw(:get_shipped_orders_by_company_and_date_range, {'StartDate' => startDate, 'EndDate' => endDate, 'ClientID' => clientID})[:get_shipped_orders_by_company_and_date_range_response][:get_shipped_orders_by_company_and_date_range_result][:diffgram][:document_element][:shipped_orders].each do |order|
+        orders.push(order[:order_id])
+      end
+      return orders
+    end
   end
 
   class Order
     def initialize(order_data)
-      @data = order_data
+      @data = order_data[:orders_get_data_response][:orders_get_data_result]
     end
 
     def products
       productTable = {}
 
-      orderData = @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item]
+      orderData = @data[:order][:items][:order_item]
       if orderData.kind_of? Array
         orderData.each do |item|
           productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name]}
@@ -141,10 +153,10 @@ module Scrub
 
     def kit_listing
       productTable = {}
-      orderData = @data[:orders_get_data_response][:orders_get_data_result][:order][:items][:order_item]
+      orderData = @data[:order][:items][:order_item]
       if orderData.kind_of? Array
-        buildout = {}
         orderData.each do |item|
+          buildout = {}
           item[:bundle_items][:order_bundle_item].each do |bundleItem|
             buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
           end
@@ -159,5 +171,31 @@ module Scrub
       end
       return productTable
     end
+
+    def order_subtotal
+      return @data[:order][:sub_total]
+    end
+
+    def warehouse_dollar_totals
+      warehouse_totals = {}
+      order_items = @data[:order][:items][:order_item]
+      if order_items.kind_of? Array
+        order_items.each do |item|
+          if warehouse_totals["#{item[:ship_from_ware_house_id]}"]
+            warehouse_totals["#{item[:ship_from_ware_house_id]}"] += item[:line_total].to_f
+          else
+            warehouse_totals["#{item[:ship_from_ware_house_id]}"] = item[:line_total].to_f
+          end
+        end
+      else
+        warehouse_totals["#{order_items[:ship_from_ware_house_id]}"] = order_items[:line_total].to_f
+      end
+      return warehouse_totals
+    end
+
+    def raw
+      @data
+    end
   end
+
 end
