@@ -156,11 +156,15 @@ module Scrub
       orderData = @data[:order][:items][:order_item]
       if orderData.kind_of? Array
         orderData.each do |item|
-          buildout = {}
-          item[:bundle_items][:order_bundle_item].each do |bundleItem|
-            buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
+          begin
+            buildout = {}
+            item[:bundle_items][:order_bundle_item].each do |bundleItem|
+              buildout.merge!("#{bundleItem[:product_id]}" => {'qtyEach' => bundleItem[:qty], 'qtyTotal' => bundleItem[:total_qty]})
+            end
+            productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name], 'components' => buildout}
+          rescue NoMethodError
+            next
           end
-          productTable[item[:product_id]] = {"qty" => item[:qty], "description" => item[:display_name], 'components' => buildout}
         end
       elsif orderData.kind_of? Hash
         buildout = {}
